@@ -1,0 +1,225 @@
+{% extends "analytics/base_dashboard.html" %}
+
+{% block title %}Call #{{ call.pk }} — SACCO Analytics{% endblock %}
+{% block page_title %}Call Detail{% endblock %}
+
+{% block extra_head %}
+<style>
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .detail-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .detail-card h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-label { color: var(--ink-soft); flex-shrink: 0; margin-right: 12px; }
+  .field-value { font-weight: 500; text-align: right; }
+
+  .transcript-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+  }
+  .transcript-card h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+  .transcript-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    min-height: 60px;
+  }
+  .empty-text {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-green { background: var(--green-lt); color: var(--green); }
+  .badge-red   { background: var(--red-lt);   color: var(--red);   }
+  .badge-amber { background: var(--amber-lt); color: var(--amber); }
+  .badge-gray  { background: var(--surface);  color: var(--ink-soft); }
+  .badge-blue  { background: var(--blue-lt);  color: var(--blue);  }
+
+  audio {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 6px;
+  }
+
+  @media (max-width: 700px) {
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="{% url 'analytics:home' %}" class="back-link">
+  ← Back to Dashboard
+</a>
+
+<div class="detail-grid">
+  <!-- Call metadata -->
+  <div class="detail-card">
+    <h3>Call Information</h3>
+    <div class="field-row">
+      <span class="field-label">Caller</span>
+      <span class="field-value">{{ call.caller_number }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Session ID</span>
+      <span class="field-value" style="font-family:monospace;font-size:11px;">{{ call.session_id }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Date &amp; Time</span>
+      <span class="field-value">{{ call.created_at|date:"M j, Y H:i:s" }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Duration</span>
+      <span class="field-value">{{ call.duration_seconds }} seconds</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Status</span>
+      <span class="field-value">
+        {% if call.status == "completed" %}
+          <span class="badge badge-green">Completed</span>
+        {% elif call.status == "failed" %}
+          <span class="badge badge-red">Failed</span>
+        {% elif call.status == "processing" %}
+          <span class="badge badge-amber">Processing</span>
+        {% else %}
+          <span class="badge badge-gray">{{ call.status|title }}</span>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  <!-- AI analysis -->
+  <div class="detail-card">
+    <h3>AI Analysis</h3>
+    <div class="field-row">
+      <span class="field-label">Language</span>
+      <span class="field-value">
+        {% if call.language_detected == "sw" %}
+          <span class="badge badge-blue">Kiswahili</span>
+        {% elif call.language_detected == "en" %}
+          <span class="badge badge-gray">English</span>
+        {% elif call.language_detected == "mixed" %}
+          <span class="badge badge-amber">Mixed</span>
+        {% else %}
+          <span class="badge badge-gray">Unknown</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Intent</span>
+      <span class="field-value">
+        {% if call.intent_detected %}
+          {{ call.intent_detected|cut:"_"|title }}
+        {% else %}
+          <span style="color:var(--ink-soft)">—</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Handled by</span>
+      <span class="field-value">
+        {% if call.intent_detected == "speak_to_agent" or call.status == "failed" %}
+          <span class="badge badge-amber">Human Agent</span>
+        {% else %}
+          <span class="badge badge-green">AI ✓</span>
+        {% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Transcript -->
+<div class="transcript-card">
+  <h3>Caller Transcript</h3>
+  {% if call.transcript %}
+    <div class="transcript-text">{{ call.transcript }}</div>
+  {% else %}
+    <div class="transcript-text empty-text">No transcript available for this call.</div>
+  {% endif %}
+</div>
+
+<!-- AI Response -->
+<div class="transcript-card">
+  <h3>AI Response</h3>
+  {% if call.response_given %}
+    <div class="transcript-text">{{ call.response_given }}</div>
+  {% else %}
+    <div class="transcript-text empty-text">No response recorded.</div>
+  {% endif %}
+</div>
+
+<!-- Recording -->
+{% if call.recording_url %}
+<div class="transcript-card">
+  <h3>Call Recording</h3>
+  <audio controls>
+    <source src="{{ call.recording_url }}" type="audio/mpeg" />
+    Your browser does not support audio playback.
+  </audio>
+  <p style="font-size:12px;color:var(--ink-soft);margin-top:8px;">
+    <a href="{{ call.recording_url }}" target="_blank" style="color:var(--accent);">
+      Open recording in new tab ↗
+    </a>
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,208 @@
+{% extends "analytics/base_dashboard.html" %}
+
+{% block title %}Payment Reminders — SACCO{% endblock %}
+{% block page_title %}Payment Reminders{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar label { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+  .filter-bar select, .filter-bar input {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface); }
+  th {
+    text-align: left; padding: 10px 14px;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+    color: var(--ink-soft); border-bottom: 1px solid var(--border);
+  }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 20px; font-size: 10px; font-weight: 700;
+  }
+  .badge-green  { background: var(--green-lt); color: var(--green); }
+  .badge-amber  { background: var(--amber-lt); color: var(--amber); }
+  .badge-red    { background: var(--red-lt);   color: var(--red);   }
+  .badge-blue   { background: var(--blue-lt);  color: var(--blue);  }
+  .badge-gray   { background: var(--surface);  color: var(--ink-soft); }
+  .pagination {
+    display: flex; gap: 6px; align-items: center;
+    padding: 14px 18px; justify-content: center;
+  }
+  .page-link {
+    padding: 5px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; text-decoration: none;
+    color: var(--ink); background: var(--card);
+  }
+  .page-link:hover, .page-link.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .meta-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 18px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--ink-soft);
+  }
+  @media (max-width: 600px) { .hide-mobile { display: none; } }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'analytics:home' %}" class="btn btn-ghost">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filter bar -->
+<form method="get" class="filter-bar">
+  <div>
+    <label>Status</label><br>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All statuses</option>
+      {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>
+          {{ label }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Type</label><br>
+    <select name="type" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for val, label in type_choices %}
+        <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>
+          {{ label }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% if status_filter or type_filter %}
+  <div style="align-self:flex-end;">
+    <a href="{% url 'loans:reminders_list' %}" class="btn btn-ghost">Clear filters</a>
+  </div>
+  {% endif %}
+</form>
+
+<!-- Table -->
+<div class="table-card">
+  <div class="meta-bar">
+    <span>{{ total }} reminder{{ total|pluralize }} found</span>
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  </div>
+
+  {% if page_obj %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Member</th>
+        <th>Phone</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th class="hide-mobile">Confirmed</th>
+        <th class="hide-mobile">Attempts</th>
+        <th class="hide-mobile">Amount Due</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in page_obj %}
+      <tr>
+        <td style="color:var(--ink-soft);font-size:11px;">#{{ r.pk }}</td>
+        <td>{{ r.reminder_date|date:"M j, Y" }}</td>
+        <td><strong>{{ r.member.full_name }}</strong></td>
+        <td style="font-family:monospace;font-size:12px;">{{ r.member.phone_number }}</td>
+        <td>
+          {% if r.reminder_type == "overdue" %}
+            <span class="badge badge-red">Overdue</span>
+          {% elif r.reminder_type == "due_today" %}
+            <span class="badge badge-amber">Due Today</span>
+          {% else %}
+            <span class="badge badge-blue">Pre-Due</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.status == "completed" %}<span class="badge badge-green">Completed</span>
+          {% elif r.status == "failed" %}<span class="badge badge-red">Failed</span>
+          {% elif r.status == "pending" %}<span class="badge badge-gray">Pending</span>
+          {% elif r.status == "sent" or r.status == "calling" %}
+            <span class="badge badge-amber">{{ r.status|title }}</span>
+          {% else %}<span class="badge badge-gray">{{ r.status|title }}</span>{% endif %}
+        </td>
+        <td class="hide-mobile">
+          {% if r.payment_confirmed %}
+            <span class="badge badge-green">✓ Yes</span>
+          {% else %}
+            <span style="color:var(--ink-soft)">—</span>
+          {% endif %}
+        </td>
+        <td class="hide-mobile" style="font-size:12px;">
+          {{ r.attempts }}/{{ r.max_attempts }}
+        </td>
+        <td class="hide-mobile" style="font-weight:600;">
+          KSh {{ r.loan.monthly_installment|floatformat:0 }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
+         class="page-link">← Prev</a>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="page-link active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?page={{ num }}&status={{ status_filter }}&type={{ type_filter }}"
+           class="page-link">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
+         class="page-link">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="text-align:center;padding:40px;color:var(--ink-soft);">
+    <strong style="display:block;font-size:15px;margin-bottom:6px;">No reminders found</strong>
+    Run <code>python manage.py check_due_payments</code> to generate reminders.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

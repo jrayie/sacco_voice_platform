@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SACCO Voice Platform Test</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
+        input, button { padding: 10px; font-size: 16px; }
+        input { width: 70%; }
+        button { width: 25%; }
+        .response { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        .intent { color: #1a73e8; font-weight: bold; }
+        .language { color: #1e8e3e; }
+    </style>
+</head>
+<body>
+    <h1>SACCO Voice Platform Test</h1>
+    <p>Type what a caller would say (Kiswahili or English):</p>
+    
+    <input type="text" id="query" placeholder="e.g., Salio yangu ni ngapi">
+    <button onclick="testClaude()">Test</button>
+    
+    <div id="result" style="display:none;" class="response">
+        <p><strong>Detected Language:</strong> <span id="language" class="language"></span></p>
+        <p><strong>Intent:</strong> <span id="intent" class="intent"></span></p>
+        <p><strong>AI Response:</strong> <span id="response"></span></p>
+        <p><strong>Call would end with:</strong> <span id="spoken"></span></p>
+    </div>
+
+    <script>
+        async function testClaude() {
+            const text = document.getElementById('query').value;
+            if (!text) return;
+            
+            const response = await fetch(`/api/voice/test-claude/?text=${encodeURIComponent(text)}`);
+            const data = await response.json();
+            
+            const result = data.claude_result;
+            
+            document.getElementById('language').textContent = result.language === 'sw' ? 'Kiswahili 🇰🇪' : 'English 🇬🇧';
+            document.getElementById('intent').textContent = result.intent;
+            document.getElementById('response').textContent = result.response_text;
+            document.getElementById('spoken').innerHTML = `<strong>🤖:</strong> "${result.response_text}"`;
+            document.getElementById('result').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+
+{% extends "analytics/base_dashboard.html" %}
+
+{% block title %}Loan Applications — SACCO{% endblock %}
+{% block page_title %}Loan Applications{% endblock %}
+
+{% block extra_head %}
+<style>
+  .filter-bar {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px;
+    margin-bottom: 16px; display: flex; gap: 12px;
+    align-items: center; flex-wrap: wrap;
+  }
+  .filter-bar label { font-size: 11px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .5px; }
+  .filter-bar select {
+    padding: 6px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px;
+    background: var(--surface); color: var(--ink);
+    margin-top: 4px; display: block;
+  }
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px; margin-bottom: 18px;
+  }
+  .mini-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .mini-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: .7px; color: var(--ink-soft); margin-bottom: 6px; }
+  .mini-card-value { font-size: 26px; font-weight: 700; letter-spacing: -.5px; }
+  .mini-card.amber .mini-card-value { color: var(--amber); }
+  .mini-card.green .mini-card-value { color: var(--green); }
+  .mini-card.red   .mini-card-value { color: var(--red);   }
+  .mini-card.blue  .mini-card-value { color: var(--blue);  }
+
+  .table-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .table-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .table-header h3 { font-size: 13px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface); }
+  th { text-align: left; padding: 9px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-soft); border-bottom: 1px solid var(--border); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .badge-amber  { background: var(--amber-lt); color: var(--amber); }
+  .badge-green  { background: var(--green-lt); color: var(--green); }
+  .badge-red    { background: var(--red-lt);   color: var(--red);   }
+  .badge-blue   { background: var(--blue-lt);  color: var(--blue);  }
+  .badge-gray   { background: var(--surface);  color: var(--ink-soft); }
+  .detail-link  { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .detail-link:hover { text-decoration: underline; }
+  .pagination { display: flex; gap: 6px; align-items: center; padding: 14px 18px; justify-content: center; }
+  .page-link { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; text-decoration: none; color: var(--ink); background: var(--card); }
+  .page-link:hover, .page-link.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .meta-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink-soft); }
+  .phone { font-family: monospace; font-size: 11px; color: var(--ink-soft); }
+  .purpose-text { font-size: 11px; color: var(--ink-soft); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 600px) { .hide-mobile { display: none; } }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'analytics:home' %}" class="btn btn-ghost">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Summary mini-cards -->
+<div class="summary-cards">
+  {% with apps=page_obj.paginator.object_list %}
+  <div class="mini-card amber">
+    <div class="mini-card-label">Pending Review</div>
+    <div class="mini-card-value">{{ apps.filter.pending_review|default:"—" }}</div>
+  </div>
+  {% endwith %}
+  <div class="mini-card amber">
+    <div class="mini-card-label">Pending</div>
+    <div class="mini-card-value" id="cnt-pending">—</div>
+  </div>
+  <div class="mini-card green">
+    <div class="mini-card-label">Approved</div>
+    <div class="mini-card-value" id="cnt-approved">—</div>
+  </div>
+  <div class="mini-card red">
+    <div class="mini-card-label">Rejected</div>
+    <div class="mini-card-value" id="cnt-rejected">—</div>
+  </div>
+  <div class="mini-card blue">
+    <div class="mini-card-label">Disbursed</div>
+    <div class="mini-card-value" id="cnt-disbursed">—</div>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<form method="get" class="filter-bar">
+  <div>
+    <label>Status</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All statuses</option>
+      {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% if status_filter %}
+  <div style="align-self:flex-end;">
+    <a href="{% url 'loans:applications_list' %}" class="btn btn-ghost">Clear</a>
+  </div>
+  {% endif %}
+</form>
+
+<!-- Table -->
+<div class="table-card">
+  <div class="meta-bar">
+    <span>{{ total }} application{{ total|pluralize }}</span>
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  </div>
+
+  {% if page_obj %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Date</th>
+        <th>Member</th>
+        <th>Amount</th>
+        <th class="hide-mobile">Purpose</th>
+        <th class="hide-mobile">Period</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for app in page_obj %}
+      <tr>
+        <td style="color:var(--ink-soft);font-size:11px;">#{{ app.pk }}</td>
+        <td style="white-space:nowrap;">{{ app.application_date|date:"M j, H:i" }}</td>
+        <td>
+          <strong>{{ app.member.full_name }}</strong><br>
+          <span class="phone">{{ app.member.phone_number }}</span>
+        </td>
+        <td style="font-weight:600;white-space:nowrap;">KSh {{ app.amount_requested|floatformat:0 }}</td>
+        <td class="hide-mobile"><div class="purpose-text" title="{{ app.purpose }}">{{ app.purpose|default:"—" }}</div></td>
+        <td class="hide-mobile">{{ app.preferred_repayment_period }} mo</td>
+        <td>
+          {% if app.status == "pending_review" %}<span class="badge badge-amber">Pending</span>
+          {% elif app.status == "approved" %}<span class="badge badge-green">Approved</span>
+          {% elif app.status == "rejected" %}<span class="badge badge-red">Rejected</span>
+          {% elif app.status == "disbursed" %}<span class="badge badge-blue">Disbursed</span>
+          {% else %}<span class="badge badge-gray">{{ app.status|title }}</span>{% endif %}
+        </td>
+        <td><a href="{% url 'loans:application_detail' app.pk %}" class="detail-link">View →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}" class="page-link">← Prev</a>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="page-link active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?page={{ num }}&status={{ status_filter }}" class="page-link">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}" class="page-link">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="text-align:center;padding:40px;color:var(--ink-soft);">
+    <strong style="display:block;margin-bottom:6px;font-size:14px;">No applications found</strong>
+    Members can apply by calling the SACCO line and saying "Nataka mkopo".
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Populate mini-card counts from analytics API
+(async () => {
+  try {
+    const res  = await fetch("{% url 'analytics:api_application_stats' %}");
+    const data = await res.json();
+    document.getElementById('cnt-pending').textContent   = data.pending   ?? '—';
+    document.getElementById('cnt-approved').textContent  = data.approved  ?? '—';
+    document.getElementById('cnt-rejected').textContent  = data.rejected  ?? '—';
+    document.getElementById('cnt-disbursed').textContent = data.disbursed ?? '—';
+  } catch(e) { console.error('Stats fetch failed', e); }
+})();
+</script>
+{% endblock %}

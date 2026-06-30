@@ -1,0 +1,292 @@
+{% extends "analytics/base_dashboard.html" %}
+
+{% block title %}Application #{{ app.pk }} — SACCO{% endblock %}
+{% block page_title %}Loan Application #{{ app.pk }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--ink-soft); text-decoration:none; font-size:13px; margin-bottom:20px; }
+  .back-link:hover { color:var(--accent); }
+
+  .status-banner {
+    border-radius: var(--radius); padding: 14px 20px;
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px; font-size: 14px; font-weight: 600;
+  }
+  .status-banner.pending_review { background: var(--amber-lt); color: var(--amber); border: 1px solid #fde68a; }
+  .status-banner.approved       { background: var(--green-lt); color: var(--green); border: 1px solid #bbf7d0; }
+  .status-banner.rejected       { background: var(--red-lt);   color: var(--red);   border: 1px solid #fecaca; }
+  .status-banner.disbursed      { background: var(--blue-lt);  color: var(--blue);  border: 1px solid #bfdbfe; }
+  .status-icon { font-size: 22px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .detail-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .detail-card h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-soft); margin-bottom: 14px; }
+  .field-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .field-row:last-child { border-bottom: none; }
+  .field-label { color: var(--ink-soft); margin-right: 12px; flex-shrink: 0; }
+  .field-value { font-weight: 500; text-align: right; }
+
+  .transcript-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .transcript-card h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-soft); margin-bottom: 12px; }
+  .transcript-box { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 14px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; min-height: 60px; font-family: system-ui, sans-serif; }
+  .empty-text { color: var(--ink-soft); font-style: italic; }
+
+  .analysis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
+  .analysis-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+  .analysis-chip-label { font-size: 10px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+  .analysis-chip-value { font-weight: 700; font-size: 14px; }
+
+  .repayment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .repay-item { text-align: center; padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+  .repay-label { font-size: 10px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .repay-value { font-size: 18px; font-weight: 700; color: var(--green); }
+  .repay-sub   { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+
+  /* Review form */
+  .review-form { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .review-form h3 { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; }
+  .form-group textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 7px;
+    font-size: 13px; font-family: inherit;
+    background: var(--surface); color: var(--ink);
+    resize: vertical; min-height: 80px;
+  }
+  .form-group textarea:focus { outline: none; border-color: var(--accent); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-approve { background: var(--green); color: #fff; padding: 9px 20px; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-approve:hover { opacity: .9; }
+  .btn-reject  { background: var(--red);   color: #fff; padding: 9px 20px; border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-reject:hover  { opacity: .9; }
+
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .badge-green  { background: var(--green-lt); color: var(--green); }
+  .badge-red    { background: var(--red-lt);   color: var(--red);   }
+  .badge-amber  { background: var(--amber-lt); color: var(--amber); }
+  .badge-gray   { background: var(--surface);  color: var(--ink-soft); }
+
+  @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .repayment-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'loans:applications_list' %}" class="btn btn-ghost">← All Applications</a>
+{% endblock %}
+
+{% block content %}
+
+<a href="{% url 'loans:applications_list' %}" class="back-link">← Back to list</a>
+
+<!-- Status banner -->
+<div class="status-banner {{ app.status }}">
+  <span class="status-icon">
+    {% if app.status == "pending_review" %}⏳
+    {% elif app.status == "approved" %}✅
+    {% elif app.status == "rejected" %}❌
+    {% elif app.status == "disbursed" %}💰
+    {% else %}📋{% endif %}
+  </span>
+  <div>
+    <div>{{ app.get_status_display }}</div>
+    {% if app.reviewed_at %}
+    <div style="font-size:12px;font-weight:400;opacity:.8;">
+      Reviewed by {{ app.reviewed_by.get_full_name|default:app.reviewed_by.username }}
+      on {{ app.reviewed_at|date:"M j, Y H:i" }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Main info grid -->
+<div class="grid-2">
+  <!-- Member info -->
+  <div class="detail-card">
+    <h3>Applicant</h3>
+    <div class="field-row">
+      <span class="field-label">Name</span>
+      <span class="field-value">{{ app.member.full_name }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Phone</span>
+      <span class="field-value" style="font-family:monospace;font-size:12px;">{{ app.member.phone_number }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Language</span>
+      <span class="field-value">
+        {% if app.member.preferred_language == "sw" %}Kiswahili{% else %}English{% endif %}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Member Status</span>
+      <span class="field-value">
+        {% if app.member.is_active %}<span class="badge badge-green">Active</span>
+        {% else %}<span class="badge badge-red">Inactive</span>{% endif %}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Applied via</span>
+      <span class="field-value" style="font-family:monospace;font-size:11px;">{{ app.caller_number }}</span>
+    </div>
+  </div>
+
+  <!-- Loan request -->
+  <div class="detail-card">
+    <h3>Loan Request</h3>
+    <div class="field-row">
+      <span class="field-label">Amount Requested</span>
+      <span class="field-value" style="font-size:18px;color:var(--blue);">KSh {{ app.amount_requested|floatformat:0 }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Purpose</span>
+      <span class="field-value" style="max-width:200px;text-align:right;">{{ app.purpose|default:"—" }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Repayment Period</span>
+      <span class="field-value">{{ app.preferred_repayment_period }} months</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Applied</span>
+      <span class="field-value">{{ app.application_date|date:"M j, Y H:i" }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Session ID</span>
+      <span class="field-value" style="font-family:monospace;font-size:10px;">{{ app.session_id|default:"—" }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Eligibility check -->
+{% if app.eligibility %}
+<div class="grid-2">
+  <div class="detail-card">
+    <h3>Eligibility Check</h3>
+    <div class="field-row">
+      <span class="field-label">Result</span>
+      <span class="field-value">
+        {% if app.eligibility.is_eligible %}
+          <span class="badge badge-green">✓ Eligible</span>
+        {% else %}
+          <span class="badge badge-red">✗ Not Eligible</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Max Eligible</span>
+      <span class="field-value">KSh {{ app.eligibility.max_eligible_amount|floatformat:0 }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Reason</span>
+      <span class="field-value" style="max-width:220px;text-align:right;font-size:12px;">{{ app.eligibility.reasons }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Checked at</span>
+      <span class="field-value">{{ app.eligibility.checked_at|date:"M j, H:i" }}</span>
+    </div>
+  </div>
+
+  <!-- Repayment plan -->
+  {% if app.repayment_plan %}
+  <div class="detail-card">
+    <h3>Repayment Plan</h3>
+    <div class="repayment-grid">
+      <div class="repay-item">
+        <div class="repay-label">Monthly</div>
+        <div class="repay-value">KSh {{ app.repayment_plan.monthly_installment|floatformat:0 }}</div>
+        <div class="repay-sub">per month</div>
+      </div>
+      <div class="repay-item">
+        <div class="repay-label">Interest</div>
+        <div class="repay-value" style="color:var(--amber);">KSh {{ app.repayment_plan.interest_total|floatformat:0 }}</div>
+        <div class="repay-sub">{{ app.repayment_plan.interest_rate_annual }}% p.a.</div>
+      </div>
+      <div class="repay-item">
+        <div class="repay-label">Total</div>
+        <div class="repay-value" style="color:var(--blue);">KSh {{ app.repayment_plan.total_repayment|floatformat:0 }}</div>
+        <div class="repay-sub">all-in</div>
+      </div>
+    </div>
+    <div class="field-row" style="margin-top:12px;">
+      <span class="field-label">First Payment</span>
+      <span class="field-value">{{ app.repayment_plan.first_payment_date|date:"M j, Y" }}</span>
+    </div>
+    <div class="field-row">
+      <span class="field-label">Last Payment</span>
+      <span class="field-value">{{ app.repayment_plan.last_payment_date|date:"M j, Y" }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Claude analysis -->
+{% if app.claude_analysis %}
+<div class="transcript-card">
+  <h3>Claude AI Extraction</h3>
+  <div class="analysis-grid">
+    {% for key, value in app.claude_analysis.items %}
+    <div class="analysis-chip">
+      <div class="analysis-chip-label">{{ key|cut:"_"|title }}</div>
+      <div class="analysis-chip-value">
+        {% if value is None %}—
+        {% elif value == True %}Yes
+        {% elif value == False %}No
+        {% else %}{{ value }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Voice transcript -->
+<div class="transcript-card">
+  <h3>Voice Conversation Transcript</h3>
+  {% if app.transcript_original %}
+    <div class="transcript-box">{{ app.transcript_original }}</div>
+  {% else %}
+    <div class="transcript-box empty-text">No transcript recorded for this application.</div>
+  {% endif %}
+</div>
+
+<!-- Review notes (if already reviewed) -->
+{% if app.review_notes %}
+<div class="transcript-card">
+  <h3>Review Notes</h3>
+  <div class="transcript-box">{{ app.review_notes }}</div>
+</div>
+{% endif %}
+
+<!-- Approve / reject form (pending applications only) -->
+{% if app.status == "pending_review" %}
+<div class="review-form">
+  <h3>Review this Application</h3>
+  <div class="form-group">
+    <label>Notes (optional — visible in audit log)</label>
+    <textarea id="review-notes" placeholder="e.g. Member has good repayment history. Approved per credit policy."></textarea>
+  </div>
+  <div class="btn-row">
+    <form method="post" action="{% url 'loans:approve_application' app.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="notes" id="approve-notes">
+      <button type="submit" class="btn-approve"
+              onclick="document.getElementById('approve-notes').value = document.getElementById('review-notes').value;">
+        ✓ Approve KSh {{ app.amount_requested|floatformat:0 }}
+      </button>
+    </form>
+    <form method="post" action="{% url 'loans:reject_application' app.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="notes" id="reject-notes">
+      <button type="submit" class="btn-reject"
+              onclick="document.getElementById('reject-notes').value = document.getElementById('review-notes').value;"
+              onclick="return confirm('Reject this application?')">
+        ✗ Reject
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

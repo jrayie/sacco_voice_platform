@@ -1,0 +1,766 @@
+{% extends "analytics/base_dashboard.html" %}
+
+{% block title %}Dashboard — SACCO Analytics{% endblock %}
+{% block page_title %}Today's Overview{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Section headings ── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── KPI cards ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .card-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .card-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -.5px;
+  }
+  .card-sub { font-size: 11px; color: var(--ink-soft); margin-top: 5px; }
+  .card.green .card-value { color: var(--green); }
+  .card.amber .card-value { color: var(--amber); }
+  .card.blue  .card-value { color: var(--blue);  }
+  .card.red   .card-value { color: var(--red);   }
+
+  /* ── Charts grid ── */
+  .charts-grid-2 {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .charts-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  .chart-card h3 {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 14px;
+  }
+  .chart-wrap          { position: relative; height: 200px; }
+  .chart-wrap.sm       { height: 160px; }
+  .chart-wrap.donut    { height: 180px; }
+
+  /* ── Range picker ── */
+  .range-picker { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .range-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    transition: all .15s;
+  }
+  .range-btn:hover, .range-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  /* ── Tables ── */
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-header h3 { font-size: 13px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface); }
+  th {
+    text-align: left;
+    padding: 9px 14px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); cursor: default; }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+  .badge-green  { background: var(--green-lt);  color: var(--green); }
+  .badge-amber  { background: var(--amber-lt);  color: var(--amber); }
+  .badge-red    { background: var(--red-lt);    color: var(--red);   }
+  .badge-blue   { background: var(--blue-lt);   color: var(--blue);  }
+  .badge-gray   { background: var(--surface);   color: var(--ink-soft); }
+
+  .detail-link { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .detail-link:hover { text-decoration: underline; }
+
+  /* ── Refresh spinner ── */
+  .spinner {
+    display: none; width: 14px; height: 14px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .refreshing .spinner { display: inline-block; }
+  .refreshing .refresh-label { display: none; }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 32px; color: var(--ink-soft); font-size: 13px; }
+  .empty strong { display: block; font-size: 14px; margin-bottom: 4px; color: var(--ink); }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .charts-grid-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 860px) {
+    .charts-grid-2, .charts-grid-3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .cards { grid-template-columns: 1fr 1fr; }
+    .hide-mobile { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-ghost" id="refreshBtn" onclick="refreshCharts()">
+  <span class="refresh-label">↻ Refresh</span>
+  <span class="spinner"></span>
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Range picker -->
+<div class="range-picker">
+  <button class="range-btn active" onclick="setRange(this,'7d')">Last 7 days</button>
+  <button class="range-btn" onclick="setRange(this,'30d')">Last 30 days</button>
+</div>
+
+<!-- ── CALL KPI CARDS ───────────────────────────────────────────────────────── -->
+<div class="section-title">Voice Calls — Today</div>
+<div class="cards">
+  <div class="card blue">
+    <div class="card-label">Total Calls</div>
+    <div class="card-value">{{ today_total }}</div>
+    <div class="card-sub">as of now</div>
+  </div>
+  <div class="card {% if today_ai_pct >= 80 %}green{% elif today_ai_pct >= 60 %}amber{% else %}red{% endif %}">
+    <div class="card-label">AI Handled</div>
+    <div class="card-value">{{ today_ai_pct }}%</div>
+    <div class="card-sub">no human needed</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Avg Duration</div>
+    <div class="card-value">{{ today_avg_dur|floatformat:0 }}s</div>
+    <div class="card-sub">per call</div>
+  </div>
+  <div class="card {% if today_esc_pct <= 10 %}green{% elif today_esc_pct <= 25 %}amber{% else %}red{% endif %}">
+    <div class="card-label">Escalation Rate</div>
+    <div class="card-value">{{ today_esc_pct }}%</div>
+    <div class="card-sub">routed to agent</div>
+  </div>
+</div>
+
+<!-- ── REMINDER KPI CARDS ───────────────────────────────────────────────────── -->
+{% if loans_app_available %}
+<div class="section-title">Payment Reminders — Today</div>
+<div class="cards">
+  <div class="card blue">
+    <div class="card-label">Reminders Sent</div>
+    <div class="card-value" id="card-reminders-today">{{ reminders_today }}</div>
+    <div class="card-sub">outbound calls today</div>
+  </div>
+  <div class="card {% if confirmation_rate >= 70 %}green{% elif confirmation_rate >= 40 %}amber{% else %}red{% endif %}">
+    <div class="card-label">Confirmation Rate</div>
+    <div class="card-value" id="card-confirmation-rate">{{ confirmation_rate }}%</div>
+    <div class="card-sub">members committed to pay</div>
+  </div>
+  <div class="card green">
+    <div class="card-label">Overdue Follow-ups</div>
+    <div class="card-value" id="card-overdue">—</div>
+    <div class="card-sub">pending action</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Failed Calls</div>
+    <div class="card-value" id="card-failed">—</div>
+    <div class="card-sub">will retry</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── CALL CHARTS ───────────────────────────────────────────────────────────── -->
+<div class="section-title">Call Trends</div>
+<div class="charts-grid-2">
+  <div class="chart-card">
+    <h3>Volume &amp; Accuracy — selected period</h3>
+    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>Top intents this week</h3>
+    <div class="chart-wrap"><canvas id="intentChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ── REMINDER CHARTS + HOURLY ─────────────────────────────────────────────── -->
+<div class="charts-grid-3">
+  <div class="chart-card" style="grid-column: span 2;">
+    <h3>Calls by hour — today</h3>
+    <div class="chart-wrap sm"><canvas id="hourlyChart"></canvas></div>
+  </div>
+  {% if loans_app_available %}
+  <div class="chart-card">
+    <h3>Reminder status — last 7 days</h3>
+    <div class="chart-wrap donut"><canvas id="reminderDonut"></canvas></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── RECENT CALLS TABLE ────────────────────────────────────────────────────── -->
+<div class="section-title">Recent Calls</div>
+<div class="table-card">
+  <div class="table-header">
+    <h3>Last 10 calls</h3>
+    <a href="{% url 'analytics:export_csv' %}" class="btn btn-ghost" style="font-size:12px;">
+      Download CSV
+    </a>
+  </div>
+  {% if recent_calls %}
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th><th>Caller</th><th>Intent</th>
+        <th>Lang</th><th>Dur</th><th>Status</th>
+        <th class="hide-mobile">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for call in recent_calls %}
+      <tr>
+        <td>{{ call.created_at|date:"M j, H:i" }}</td>
+        <td>{{ call.caller_number }}</td>
+        <td>{% if call.intent_detected %}{{ call.intent_detected|cut:"_"|title }}{% else %}—{% endif %}</td>
+        <td>
+          {% if call.language_detected == "sw" %}<span class="badge badge-blue">SW</span>
+          {% elif call.language_detected == "en" %}<span class="badge badge-gray">EN</span>
+          {% else %}<span class="badge badge-amber">MX</span>{% endif %}
+        </td>
+        <td>{{ call.duration_seconds }}s</td>
+        <td>
+          {% if call.status == "completed" %}<span class="badge badge-green">Done</span>
+          {% elif call.status == "failed" %}<span class="badge badge-red">Failed</span>
+          {% elif call.status == "processing" %}<span class="badge badge-amber">Processing</span>
+          {% else %}<span class="badge badge-gray">{{ call.status|title }}</span>{% endif %}
+        </td>
+        <td class="hide-mobile">
+          <a href="{% url 'analytics:call_detail' call.pk %}" class="detail-link">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    <strong>No calls yet</strong>
+    Run <code>python manage.py generate_sample_data</code> to load test data.
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── RECENT REMINDERS TABLE ────────────────────────────────────────────────── -->
+{% if loans_app_available and recent_reminders %}
+<div class="section-title">Recent Payment Reminders</div>
+<div class="table-card">
+  <div class="table-header">
+    <h3>Last 8 reminders</h3>
+    <a href="{% url 'loans:reminders_list' %}" class="btn btn-ghost" style="font-size:12px;">
+      View all →
+    </a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Member</th><th>Type</th>
+        <th>Status</th><th class="hide-mobile">Confirmed</th>
+        <th class="hide-mobile">Attempts</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent_reminders %}
+      <tr>
+        <td>{{ r.reminder_date|date:"M j" }}</td>
+        <td>{{ r.member.full_name }}<br>
+          <span style="font-size:11px;color:var(--ink-soft);">{{ r.member.phone_number }}</span>
+        </td>
+        <td>
+          {% if r.reminder_type == "overdue" %}<span class="badge badge-red">Overdue</span>
+          {% elif r.reminder_type == "due_today" %}<span class="badge badge-amber">Due Today</span>
+          {% else %}<span class="badge badge-blue">Pre-Due</span>{% endif %}
+        </td>
+        <td>
+          {% if r.status == "completed" %}<span class="badge badge-green">Done</span>
+          {% elif r.status == "failed" %}<span class="badge badge-red">Failed</span>
+          {% elif r.status == "pending" %}<span class="badge badge-gray">Pending</span>
+          {% else %}<span class="badge badge-amber">{{ r.status|title }}</span>{% endif %}
+        </td>
+        <td class="hide-mobile">
+          {% if r.payment_confirmed %}
+            <span class="badge badge-green">✓ Yes</span>
+          {% else %}
+            <span class="badge badge-gray">—</span>
+          {% endif %}
+        </td>
+        <td class="hide-mobile">{{ r.attempts }}/{{ r.max_attempts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ── LOAN APPLICATIONS ──────────────────────────────────────────────────────── -->
+{% if loans_applications_available %}
+<div class="section-title">Loan Applications</div>
+
+<!-- Application KPI cards -->
+<div class="cards">
+  <div class="card blue">
+    <div class="card-label">Applications Today</div>
+    <div class="card-value" id="app-card-today">{{ apps_today }}</div>
+    <div class="card-sub">via voice calls</div>
+  </div>
+  <div class="card {% if apps_pending > 0 %}amber{% else %}green{% endif %}">
+    <div class="card-label">Pending Review</div>
+    <div class="card-value" id="app-card-pending">{{ apps_pending }}</div>
+    <div class="card-sub">awaiting decision</div>
+  </div>
+  <div class="card green">
+    <div class="card-label">Approved This Month</div>
+    <div class="card-value" style="font-size:20px;" id="app-card-amount">
+      KSh {{ approved_amount_month|floatformat:0 }}
+    </div>
+    <div class="card-sub">total approved</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Approval Rate</div>
+    <div class="card-value" id="app-card-rate">
+      {% if apps_approved and apps_approved|add:apps_rejected > 0 %}
+        {{ apps_approved|add:"0" }}%
+      {% else %}—{% endif %}
+    </div>
+    <div class="card-sub">approved vs reviewed</div>
+  </div>
+</div>
+
+<!-- Application status chart + recent applications table -->
+<div class="charts-grid-2" style="margin-top:12px;">
+  <div class="table-card" style="border-radius:var(--radius);overflow:hidden;">
+    <div class="table-header">
+      <h3>Recent Applications</h3>
+      <a href="{% url 'loans:applications_list' %}" class="btn btn-ghost" style="font-size:12px;">
+        View all →
+      </a>
+    </div>
+    {% if recent_apps %}
+    <table>
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Amount</th>
+          <th>Purpose</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in recent_apps %}
+        <tr onclick="window.location='{% url 'loans:application_detail' a.pk %}'"
+            style="cursor:pointer;">
+          <td>
+            <strong>{{ a.member.full_name }}</strong><br>
+            <span style="font-size:11px;color:var(--ink-soft);">{{ a.application_date|date:"M j, H:i" }}</span>
+          </td>
+          <td style="font-weight:600;white-space:nowrap;">KSh {{ a.amount_requested|floatformat:0 }}</td>
+          <td style="font-size:11px;color:var(--ink-soft);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            {{ a.purpose|default:"—"|truncatechars:30 }}
+          </td>
+          <td>
+            {% if a.status == "pending_review" %}<span class="badge badge-amber">Pending</span>
+            {% elif a.status == "approved" %}<span class="badge badge-green">Approved</span>
+            {% elif a.status == "rejected" %}<span class="badge badge-red">Rejected</span>
+            {% elif a.status == "disbursed" %}<span class="badge badge-blue">Disbursed</span>
+            {% else %}<span class="badge badge-gray">{{ a.status|title }}</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+      <strong>No applications yet</strong>
+      Members apply by calling and saying "Nataka mkopo" or "I want a loan".
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="chart-card">
+    <h3>Application status — last 30 days</h3>
+    <div class="chart-wrap donut">
+      <canvas id="appStatusChart"></canvas>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Data from Django ───────────────────────────────────────────────────────────
+const chartData  = {{ chart_data_json|safe }};
+const topIntents = {{ top_intents_json|safe }};
+const hourlyData = {{ hourly_data_json|safe }};
+const reminderStatusData = {{ status_chart_json|safe }};
+
+// ── Palette ────────────────────────────────────────────────────────────────────
+const ACCENT  = '#0ea5e9';
+const GREEN   = '#16a34a';
+const AMBER   = '#d97706';
+const RED     = '#dc2626';
+const PURPLE  = '#8b5cf6';
+const PINK    = '#ec4899';
+
+Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+Chart.defaults.font.size   = 12;
+Chart.defaults.color       = '#4a5568';
+
+// ── Trend chart ────────────────────────────────────────────────────────────────
+const trendCtx = document.getElementById('trendChart').getContext('2d');
+let trendChart = new Chart(trendCtx, {
+  data: {
+    labels: chartData.dates.map(d => new Date(d).toLocaleDateString('en-KE', {month:'short',day:'numeric'})),
+    datasets: [
+      {
+        type: 'bar', label: 'Total Calls',
+        data: chartData.total_calls,
+        backgroundColor: ACCENT + '33', borderColor: ACCENT,
+        borderWidth: 1.5, borderRadius: 4, yAxisID: 'yLeft',
+      },
+      {
+        type: 'line', label: 'Accuracy %',
+        data: chartData.accuracy,
+        borderColor: GREEN, backgroundColor: 'transparent',
+        borderWidth: 2, tension: 0.35,
+        pointRadius: 4, pointBackgroundColor: GREEN, yAxisID: 'yRight',
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 12, padding: 14 } },
+      tooltip: {
+        callbacks: {
+          label: ctx => ctx.datasetIndex === 1
+            ? ` Accuracy: ${ctx.parsed.y}%` : ` Calls: ${ctx.parsed.y}`
+        }
+      }
+    },
+    scales: {
+      yLeft:  { beginAtZero: true, grid: { color: '#e2e8f022' } },
+      yRight: { beginAtZero: true, max: 100, position: 'right',
+                grid: { drawOnChartArea: false },
+                ticks: { callback: v => v + '%' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ── Intent bar chart ───────────────────────────────────────────────────────────
+const intentCtx = document.getElementById('intentChart').getContext('2d');
+let intentChart = new Chart(intentCtx, {
+  type: 'bar',
+  data: {
+    labels: topIntents.map(i => i.intent),
+    datasets: [{
+      data: topIntents.map(i => i.count),
+      backgroundColor: [ACCENT, GREEN, AMBER, PURPLE, PINK],
+      borderRadius: 5,
+    }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { beginAtZero: true, grid: { color: '#e2e8f022' } },
+      y: { grid: { display: false } }
+    }
+  }
+});
+
+// ── Hourly chart ───────────────────────────────────────────────────────────────
+const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+let hourlyChart = new Chart(hourlyCtx, {
+  type: 'line',
+  data: {
+    labels: hourlyData.hours.map(h => h.toString().padStart(2,'0') + ':00'),
+    datasets: [{
+      label: 'Calls', data: hourlyData.counts,
+      borderColor: ACCENT, backgroundColor: ACCENT + '18',
+      fill: true, tension: 0.4, pointRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, grid: { color: '#e2e8f022' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ── Reminder donut ─────────────────────────────────────────────────────────────
+const donutEl = document.getElementById('reminderDonut');
+let reminderChart = null;
+if (donutEl && reminderStatusData.labels.length > 0) {
+  const DONUT_COLOURS = [ACCENT, GREEN, AMBER, RED, '#6b7280', PURPLE];
+  reminderChart = new Chart(donutEl.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: reminderStatusData.labels,
+      datasets: [{
+        data: reminderStatusData.counts,
+        backgroundColor: DONUT_COLOURS.slice(0, reminderStatusData.labels.length),
+        borderWidth: 2, borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ── Range switcher ─────────────────────────────────────────────────────────────
+let currentRange = '7d';
+function setRange(btn, range) {
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentRange = range;
+  refreshCharts();
+}
+
+// ── AJAX refresh ───────────────────────────────────────────────────────────────
+async function refreshCharts() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('refreshing');
+  try {
+    // Call stats
+    const res  = await fetch(`{% url 'analytics:api_stats' %}?range=${currentRange}`);
+    const data = await res.json();
+
+    trendChart.data.labels = data.chart.dates.map(d =>
+      new Date(d).toLocaleDateString('en-KE', {month:'short',day:'numeric'})
+    );
+    trendChart.data.datasets[0].data = data.chart.total_calls;
+    trendChart.data.datasets[1].data = data.chart.accuracy;
+    trendChart.update();
+
+    intentChart.data.labels           = data.top_intents.map(i => i.intent);
+    intentChart.data.datasets[0].data = data.top_intents.map(i => i.count);
+    intentChart.update();
+
+    hourlyChart.data.datasets[0].data = data.hourly.counts;
+    hourlyChart.update();
+
+    // Reminder stats
+    {% if loans_app_available %}
+    const rRes  = await fetch("{% url 'analytics:api_reminder_stats' %}");
+    const rData = await rRes.json();
+
+    const cardToday = document.getElementById('card-reminders-today');
+    const cardRate  = document.getElementById('card-confirmation-rate');
+    const cardOver  = document.getElementById('card-overdue');
+    const cardFail  = document.getElementById('card-failed');
+
+    if (cardToday) cardToday.textContent = rData.today_total;
+    if (cardRate)  cardRate.textContent  = rData.confirmation_rate + '%';
+
+    // Count overdue and failed from status distribution
+    const statusMap = {};
+    (rData.status_distribution.labels || []).forEach((l, i) => {
+      statusMap[l.toLowerCase()] = rData.status_distribution.counts[i];
+    });
+    if (cardOver) cardOver.textContent = statusMap['pending'] || 0;
+    if (cardFail) cardFail.textContent = statusMap['failed']  || 0;
+
+    if (reminderChart && rData.status_distribution.labels.length > 0) {
+      reminderChart.data.labels           = rData.status_distribution.labels;
+      reminderChart.data.datasets[0].data = rData.status_distribution.counts;
+      reminderChart.update();
+    }
+    {% endif %}
+
+  } catch (err) {
+    console.error('Refresh failed:', err);
+  } finally {
+    btn.classList.remove('refreshing');
+  }
+}
+
+// Auto-populate secondary reminder cards on load
+{% if loans_app_available %}
+(async () => {
+  try {
+    const rRes  = await fetch("{% url 'analytics:api_reminder_stats' %}");
+    const rData = await rRes.json();
+    const statusMap = {};
+    (rData.status_distribution.labels || []).forEach((l, i) => {
+      statusMap[l.toLowerCase()] = rData.status_distribution.counts[i];
+    });
+    const cardOver = document.getElementById('card-overdue');
+    const cardFail = document.getElementById('card-failed');
+    if (cardOver) cardOver.textContent = statusMap['pending'] || 0;
+    if (cardFail) cardFail.textContent = statusMap['failed']  || 0;
+  } catch(e) {}
+})();
+{% endif %}
+
+// ── Application status donut chart ─────────────────────────────────────────────
+{% if loans_applications_available %}
+const appStatusEl = document.getElementById('appStatusChart');
+let appStatusChart = null;
+
+const APP_COLOURS = {
+  'Pending Review': AMBER,
+  'Approved':       GREEN,
+  'Rejected':       RED,
+  'Disbursed':      ACCENT,
+  'Cancelled':      '#6b7280',
+};
+
+const appStatusData = {{ app_status_dist_json|safe }};
+if (appStatusEl && appStatusData.labels.length > 0) {
+  appStatusChart = new Chart(appStatusEl.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: appStatusData.labels,
+      datasets: [{
+        data: appStatusData.counts,
+        backgroundColor: appStatusData.labels.map(l => APP_COLOURS[l] || '#6b7280'),
+        borderWidth: 2, borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// Load live application stats on page load
+(async () => {
+  try {
+    const aRes  = await fetch("{% url 'analytics:api_application_stats' %}");
+    const aData = await aRes.json();
+
+    const elToday   = document.getElementById('app-card-today');
+    const elPending = document.getElementById('app-card-pending');
+    const elAmount  = document.getElementById('app-card-amount');
+    const elRate    = document.getElementById('app-card-rate');
+
+    if (elToday)   elToday.textContent   = aData.today ?? '—';
+    if (elPending) elPending.textContent = aData.pending ?? '—';
+    if (elAmount)  elAmount.textContent  = 'KSh ' + (aData.approved_amount_month || 0).toLocaleString('en-KE', {maximumFractionDigits: 0});
+
+    const total_reviewed = (aData.approved || 0) + (aData.rejected || 0);
+    if (elRate) {
+      elRate.textContent = total_reviewed > 0
+        ? Math.round((aData.approved / total_reviewed) * 100) + '%'
+        : '—';
+    }
+
+    // Update donut chart
+    if (appStatusChart && aData.status_distribution.labels.length > 0) {
+      appStatusChart.data.labels           = aData.status_distribution.labels;
+      appStatusChart.data.datasets[0].data = aData.status_distribution.counts;
+      appStatusChart.data.datasets[0].backgroundColor =
+        aData.status_distribution.labels.map(l => APP_COLOURS[l] || '#6b7280');
+      appStatusChart.update();
+    }
+  } catch(e) { console.error('App stats failed:', e); }
+})();
+{% endif %}
+</script>
+{% endblock %}

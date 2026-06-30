@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}SACCO Analytics{% endblock %}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --ink:        #0f1923;
+      --ink-soft:   #4a5568;
+      --surface:    #f7f9fc;
+      --card:       #ffffff;
+      --border:     #e2e8f0;
+      --green:      #16a34a;
+      --green-lt:   #dcfce7;
+      --amber:      #d97706;
+      --amber-lt:   #fef3c7;
+      --red:        #dc2626;
+      --red-lt:     #fee2e2;
+      --blue:       #2563eb;
+      --blue-lt:    #dbeafe;
+      --accent:     #0ea5e9;    /* SACCO sky-blue */
+      --sidebar-w:  220px;
+      --radius:     10px;
+      --shadow:     0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--surface);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--ink);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+      transition: transform .25s ease;
+    }
+    .sidebar-brand {
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .sidebar-brand .logo-mark {
+      display: inline-block;
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 32px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .sidebar-brand h1 {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      line-height: 1.2;
+    }
+    .sidebar-brand p {
+      font-size: 11px;
+      opacity: .5;
+      margin-top: 2px;
+    }
+    nav { flex: 1; padding: 12px 0; }
+    .nav-section {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: .4;
+      padding: 12px 18px 4px;
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 18px;
+      font-size: 13.5px;
+      color: rgba(255,255,255,.75);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .nav-link:hover, .nav-link.active {
+      color: #fff;
+      background: rgba(255,255,255,.07);
+      border-left-color: var(--accent);
+    }
+    .nav-link svg { width: 16px; height: 16px; opacity: .8; flex-shrink: 0; }
+    .sidebar-footer {
+      padding: 14px 18px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      font-size: 12px;
+      opacity: .5;
+    }
+
+    /* ── Main content ── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+    }
+    .topbar h2 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--ink-soft);
+    }
+    .btn-ghost:hover { background: var(--surface); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: .9; }
+    .btn svg { width: 14px; height: 14px; }
+
+    /* ── Page body ── */
+    .page-body {
+      padding: 24px;
+      flex: 1;
+    }
+
+    /* ── Hamburger (mobile) ── */
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .menu-toggle svg { width: 20px; height: 20px; }
+
+    /* ── Messages ── */
+    .messages { margin-bottom: 16px; }
+    .message {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .message.success { background: var(--green-lt); color: var(--green); }
+    .message.error   { background: var(--red-lt);   color: var(--red);   }
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0,0,0,.25);
+      }
+      .main { margin-left: 0; }
+      .menu-toggle { display: block; }
+      .page-body { padding: 16px; }
+    }
+
+    /* ── Overlay (mobile sidebar) ── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.4);
+      z-index: 99;
+    }
+    .sidebar-overlay.open { display: block; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Mobile overlay -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo-mark">S</div>
+    <h1>SACCO Analytics</h1>
+    <p>Management Dashboard</p>
+  </div>
+
+  <nav>
+    <div class="nav-section">Overview</div>
+    <a href="{% url 'analytics:home' %}"
+       class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+      Dashboard
+    </a>
+
+    <div class="nav-section">Data</div>
+    <a href="{% url 'analytics:export_csv' %}" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Export CSV
+    </a>
+
+    <div class="nav-section">Loans</div>
+    <a href="{% url 'loans:applications_list' %}"
+       class="nav-link {% if 'applications' in request.path %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      Applications
+    </a>
+    <a href="{% url 'loans:reminders_list' %}"
+       class="nav-link {% if 'reminders' in request.path %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.93 12 19.79 19.79 0 0 1 2.12 3.18 2 2 0 0 1 4.11 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      Reminders
+    </a>
+
+    <div class="nav-section">Admin</div>
+    <a href="/admin/voice/calllog/" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      Call Logs
+    </a>
+    <a href="/admin/" class="nav-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.07 4.93A10 10 0 1 0 4.93 19.07 10 10 0 0 0 19.07 4.93z"/>
+      </svg>
+      Django Admin
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    Logged in as <strong>{{ request.user.username }}</strong>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <!-- Top bar -->
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+    </div>
+    <div class="topbar-actions">
+      {% block topbar_actions %}{% endblock %}
+      <a href="{% url 'analytics:export_csv' %}" class="btn btn-ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+      </a>
+    </div>
+  </header>
+
+  <!-- Page body -->
+  <main class="page-body">
+    {% if messages %}
+    <div class="messages">
+      {% for msg in messages %}
+      <div class="message {{ msg.tags }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script>
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
